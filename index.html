@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.css">
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+</head>
+
+<body onload="Init()">
+    <button onclick="login()">Login</button>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Products list -->
+                <div id="productlist"></div>
+            </div>
+            <div class="col-md-4">
+                <!-- Shopping cart side card -->
+                <div class="card">
+                    <div class="card-header">
+                        Shopping Cart
+                    </div>
+                    <ul class="list-group list-group-flush" id="cart-items">
+                        <!-- Cart items will be added here -->
+                    </ul>
+                    <div class="card-body">
+                        <button class="btn btn-primary" onclick="checkout()">Checkout</button>
+                        <button class="btn btn-danger" onclick="clearCart()">Clear Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    let cart = {};
+    let shoppingproducts = []
+    let myToken = "";
+    const MY_SERVER = "http://127.0.0.1:8000"
+    async function ShowProducts() {
+        // const response = await fetch(MY_SERVER + "/products/");
+        const response = await fetch(MY_SERVER + "/products/", {
+            method: 'GET', // or the HTTP method you need (GET, POST, etc.)
+            headers: {
+                'Authorization': `Bearer ${myToken}`,
+                'Content-Type': 'application/json', // Set the appropriate content type if needed
+                // You can include other headers as needed
+            },
+            // You can include other options like 'body' for POST requests, etc.
+        });
+        const products = await response.json();
+
+        const response2 = await fetch(MY_SERVER + "/categories/", {
+            method: 'GET',
+            headers: {
+                "Authorization": `Bearer ${myToken}`,
+                'Content-Type': 'application/json',
+
+            },
+        });
+        const categories = await response2.json();
+
+        let categorytype = {}
+        categories.map(function (category) {
+            categorytype[category.id] = category.description
+        })
+        shoppingproducts = products
+        productlist.innerHTML = ""; // Clear the productlist
+
+        products.map(function (element,index) {
+            productlist.innerHTML += `
+            <div class="card mb-3" style="max-width: 540px;">
+                <div class="row g-0">
+                    <div class="col-md-4">
+                        <img src="${MY_SERVER}${element.img}" alt="Product Image" class="img-fluid">
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card-body">
+                            <h5 class="card-title">${element.name}</h5>
+                            <p class="card-text">Description: ${element.description}</p>
+                            <p class="card-text">Category: ${categorytype[element.category]}</p>
+                            <p class="card-text">Price: $${element.price}</p>
+                            <button class="btn btn-primary" onclick="OnProductBuy(${index})">Buy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        });
+    }
+
+    function OnProductBuy(id) {
+        let product = shoppingproducts[id]
+        addToCart(product);
+    }
+
+    function addToCart(product) {
+        // Check if the product is already in the cart
+        if (cart[product.id]) {
+            // If it is, increment the count
+            cart[product.id].count++;
+        } else {
+            // If not, add it to the cart with a count of 1
+            cart[product.id] = { ...product, count: 1 };
+        }
+
+        updateCartDisplay();
+    }
+
+    function updateCartDisplay() {
+        const cartItems = document.getElementById('cart-items');
+        cartItems.innerHTML = ''; // Clear the existing items
+
+        for (const productId in cart) {
+            if (cart.hasOwnProperty(productId)) {
+                const product = cart[productId];
+                const cartItem = document.createElement('li');
+                cartItem.classList.add('list-group-item');
+                cartItem.innerHTML = `${product.name} (Count: ${product.count}) - $${product.price * product.count}`;
+                cartItems.appendChild(cartItem);
+            }
+        }
+        SaveData()
+    }
+
+    async function checkout() {
+        if (!cart || cart.length == 0 || Object.keys(cart).length === 0) {
+            alert("No Items In The Cart Yet.")
+            return
+        }
+
+        // Calculate the total price
+        let totalPrice = 0;
+        for (const productId in cart) {
+            if (cart.hasOwnProperty(productId)) {
+                const product = cart[productId];
+                totalPrice += product.price * product.count;
+            }
+        }
+
+        // Ask for confirmation
+        const confirmationMessage = `Are you sure you want to purchase all the items for $${totalPrice}?`;
+        const isConfirmed = confirm(confirmationMessage);
+
+        if (isConfirmed) {
+            // Proceed with the purchase logic
+            // ...
+            const response = await fetch(MY_SERVER+"/purchase/",{
+                method: "POST",
+                headers:{
+                    "Authorization": `Bearer ${myToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({"cart":cart,"price":totalPrice})
+            })
+            const result = await response.json();
+            if (result.state == "success"){
+                Message(result.msg,"success")
+            }else{
+                Message(result.msg,"error")
+            }
+            //alert("Purchase confirmed. Implement your purchase logic here.");
+        } else {
+            alert("Purchase canceled.");
+        }
+    }
+
+    function clearCart(specificitem){
+        if (!specificitem){
+            const cartItems = document.getElementById('cart-items');
+            cartItems.innerHTML = ''; // Clear the existing items
+            for (const productId in cart) {
+                if (cart.hasOwnProperty(productId)) {
+                    delete cart[productId];
+                }
+            }
+            localStorage.removeItem("cart")
+        }else{
+            for (const productId in cart) {
+                console.log(productId)
+            }
+        }
+
+    }
+
+    function SaveData(){
+        localStorage.setItem("cart",JSON.stringify(cart))
+    }
+
+    function LoadData(){
+        let cartsave = JSON.parse(localStorage.getItem("cart"))
+        if (cartsave){
+            cart = cartsave
+        }
+        updateCartDisplay()
+    }
+
+    async function login(){
+        let data = {
+            "username":"savta",
+            "password":"savta"
+        }
+        try {
+            const response = await fetch(MY_SERVER+"/login/", {
+            method: "POST", // or 'PUT'
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+            });
+
+            const result = await response.json();
+            myToken = result.access
+            sessionStorage.setItem("token",myToken)
+            Message("Logged In Successfully","success")
+            LoadData()
+            ShowProducts()
+        } catch (error) {
+            console.error("Error:", error);
+        }
+    }
+
+    function Message(message, type){
+
+        // If type not selected play a default color
+        if(!type){
+            type = "linear-gradient(to right, #00b09b, #96c93d)"
+        }else if (type == "error"){
+            type = "linear-gradient(to right, #F74141, #B30000)"
+        }else if (type == "info"){
+            type = "linear-gradient(to right, #25A9F6, #0067CE)"
+        }else if (type == "success"){
+            type = "linear-gradient(to right, #00A510, #167e21)"
+        }
+        Toastify({
+            text: message,
+            style: {
+                background: type, // Customize the background color
+            },
+            className: "custom-toastify", // Add a custom CSS class for styling
+            position: "bottom-center", // Change the position of the notification
+            duration: 3000, // Duration in milliseconds
+            gravity: "top", // Change the direction of the notification animation
+        }).showToast();
+    }
+
+    function Init(){
+        if (myToken != ''){
+            LoadData()
+            ShowProducts()
+        }else{
+            let variable = sessionStorage.getItem("token")
+            console.log(variable)
+            if (variable){
+                myToken = variable
+                LoadData()
+                ShowProducts()
+            }
+        }
+        
+    }
+    //LoadData()
+</script>
+
+</html>
