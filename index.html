@@ -13,7 +13,7 @@
 </head>
 
 <body onload="Init()">
-    <button onclick="login()">Login</button>
+    <h3 id = "header" style="display: none;"></h3>
     <div class="container">
         <div class="row">
             <div class="col-md-8">
@@ -201,30 +201,7 @@
         updateCartDisplay()
     }
 
-    async function login(){
-        let data = {
-            "username":"savta",
-            "password":"savta"
-        }
-        try {
-            const response = await fetch(MY_SERVER+"/login/", {
-            method: "POST", // or 'PUT'
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-            });
-
-            const result = await response.json();
-            myToken = result.access
-            sessionStorage.setItem("token",myToken)
-            Message("Logged In Successfully","success")
-            LoadData()
-            ShowProducts()
-        } catch (error) {
-            console.error("Error:", error);
-        }
-    }
+    
 
     function Message(message, type){
 
@@ -256,11 +233,15 @@
             ShowProducts()
         }else{
             let variable = sessionStorage.getItem("token")
-            console.log(variable)
             if (variable){
                 myToken = variable
+                details = JSON.parse(sessionStorage.getItem("userDetails"))
+                header.innerHTML = `Welcome, ${details.user}.`
+                header.style.display = "block";
                 LoadData()
                 ShowProducts()
+            }else{
+                window.location.href = 'login.html';
             }
         }
         
